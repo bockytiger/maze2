@@ -2,7 +2,7 @@
 import pygame
 import random
 import time
-import sys
+import asyncio
 
 pygame.init()
 
@@ -11,7 +11,7 @@ CELL = 40
 COLS = WIDTH // CELL
 ROWS = HEIGHT // CELL
 
-screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED)
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Maze Game")
 clock = pygame.time.Clock()
 
@@ -56,8 +56,6 @@ def reset_game():
     maze = gen_maze(COLS, ROWS)
     px = py = 0
     goal = (COLS-1, ROWS-1)
-
-    # ★重要：ゴールを必ず通路にする
     maze[goal[1]][goal[0]] = 0
 
     start_time = None
@@ -70,77 +68,75 @@ retry_rect = pygame.Rect(WIDTH//2-80, HEIGHT-50, 160, 35)
 reset_game()
 
 # =====================
-# メインループ
+# メインループ（async 必須）
 # =====================
-while True:
-    for e in pygame.event.get():
-        if e.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
+async def main():
+    global px, py, start_time, goal_time, finished, best_time
 
-        if e.type == pygame.KEYDOWN and not finished:
-            if start_time is None:
-                start_time = time.time()
+    running = True
+    while running:
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                running = False   # ← exitしない
 
-            dx = dy = 0
-            if e.key == pygame.K_UP:    dy = -1
-            if e.key == pygame.K_DOWN:  dy = 1
-            if e.key == pygame.K_LEFT:  dx = -1
-            if e.key == pygame.K_RIGHT: dx = 1
+            if e.type == pygame.KEYDOWN and not finished:
+                if start_time is None:
+                    start_time = time.time()
 
-            nx, ny = px+dx, py+dy
-            if 0<=nx<COLS and 0<=ny<ROWS and maze[ny][nx]==0:
-                px, py = nx, ny
+                dx = dy = 0
+                if e.key == pygame.K_UP:    dy = -1
+                if e.key == pygame.K_DOWN:  dy = 1
+                if e.key == pygame.K_LEFT:  dx = -1
+                if e.key == pygame.K_RIGHT: dx = 1
 
-        if e.type == pygame.MOUSEBUTTONDOWN and finished:
-            if retry_rect.collidepoint(e.pos):
-                reset_game()
+                nx, ny = px+dx, py+dy
+                if 0<=nx<COLS and 0<=ny<ROWS and maze[ny][nx]==0:
+                    px, py = nx, ny
 
-    # =====================
-    # ゴール判定
-    # =====================
-    if not finished and (px, py) == goal:
-        finished = True
-        goal_time = time.time() - start_time
-        if best_time is None or goal_time < best_time:
-            best_time = goal_time
+            if e.type == pygame.MOUSEBUTTONDOWN and finished:
+                if retry_rect.collidepoint(e.pos):
+                    reset_game()
 
-    # =====================
-    # 描画
-    # =====================
-    screen.fill(WHITE)
+        # ゴール判定
+        if not finished and (px, py) == goal:
+            finished = True
+            goal_time = time.time() - start_time
+            if best_time is None or goal_time < best_time:
+                best_time = goal_time
 
-    for y in range(ROWS):
-        for x in range(COLS):
-            if maze[y][x]:
-                pygame.draw.rect(screen, BLACK,
-                    (x*CELL, y*CELL, CELL, CELL))
+        # 描画
+        screen.fill(WHITE)
 
-    # ゴール
-    pygame.draw.rect(screen, RED,
-        (goal[0]*CELL, goal[1]*CELL, CELL, CELL))
+        for y in range(ROWS):
+            for x in range(COLS):
+                if maze[y][x]:
+                    pygame.draw.rect(screen, BLACK,
+                        (x*CELL, y*CELL, CELL, CELL))
 
-    # プレイヤー
-    pygame.draw.circle(screen, BLUE,
-        (px*CELL + CELL//2, py*CELL + CELL//2),
-        CELL//3)
+        pygame.draw.rect(screen, RED,
+            (goal[0]*CELL, goal[1]*CELL, CELL, CELL))
 
-    # タイマー
-    t = (time.time()-start_time) if start_time and not finished else goal_time
-    screen.blit(font.render(f"TIME: {t:.1f}s", True, BLACK), (10,10))
+        pygame.draw.circle(screen, BLUE,
+            (px*CELL + CELL//2, py*CELL + CELL//2),
+            CELL//3)
 
-    # ベスト
-    if best_time:
-        screen.blit(font.render(f"BEST: {best_time:.1f}s", True, GOLD), (10,40))
+        t = (time.time()-start_time) if start_time and not finished else goal_time
+        screen.blit(font.render(f"TIME: {t:.1f}s", True, BLACK), (10,10))
 
-    # もう一回
-    if finished:
-        pygame.draw.rect(screen, GRAY, retry_rect)
-        pygame.draw.rect(screen, BLACK, retry_rect, 2)
-        txt = font.render("もう一回", True, BLACK)
-        screen.blit(txt,
-            (retry_rect.centerx - txt.get_width()//2,
-             retry_rect.centery - txt.get_height()//2))
+        if best_time:
+            screen.blit(font.render(f"BEST: {best_time:.1f}s", True, GOLD), (10,40))
 
-    pygame.display.flip()
-    clock.tick(30)
+        if finished:
+            pygame.draw.rect(screen, GRAY, retry_rect)
+            pygame.draw.rect(screen, BLACK, retry_rect, 2)
+            txt = font.render("もう一回", True, BLACK)
+            screen.blit(txt,
+                (retry_rect.centerx - txt.get_width()//2,
+                 retry_rect.centery - txt.get_height()//2))
+
+        pygame.display.flip()
+        clock.tick(30)
+
+        await asyncio.sleep(0)  # ← Webで必須
+
+asyncio.run(main())
