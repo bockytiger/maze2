@@ -1,6 +1,6 @@
 [project]
 name = "maze_game"
-entrypoint = "main.py"
+entrypoint = "game.py"
 
 [build]
 target = "web"
